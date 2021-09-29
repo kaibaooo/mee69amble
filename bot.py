@@ -445,6 +445,14 @@ async def on_message(message):
                 print(traceback.format_exc())
                 embed=discord.Embed(description=f"Unexpected Error", color=0xFF3333)
                 await message.channel.send(embed=embed)
+        elif parse[0] == f"{config.prefix}coin-price": # !coins-price
+            cg = CoinGeckoAPI()
+            result = cg.get_price(ids=['bitcoin', 'litecoin', 'ethereum', 'tether', 'dogecoin', 'iota'], vs_currencies='usd')
+            embed=discord.Embed(title="**虛擬貨幣報價電視牆**")
+            embed.set_thumbnail(url="https://firebasestorage.googleapis.com/v0/b/chatroom-5b1d0.appspot.com/o/rgd.jpg?alt=media&token=947e8bdf-d685-431c-8ec5-98e26e5d29d7")
+            for key, val in config.coin_names2full.items():
+                embed.add_field(name=f"{key} - {val}", value=f"{config.economy_icon} {result[val]['usd']} ", inline=False)
+            await message.channel.send(embed=embed)
         elif parse[0] == f"{config.prefix}buy-coin": # !buy-coin 50 btc
             # try:
             paid = int(parse[1])
@@ -554,6 +562,7 @@ async def on_message(message):
             embed.add_field(name="和人玩貓貓賭博遊戲", value=f"`{config.prefix}battle [money] [@someone]`", inline=False)
             embed.add_field(name="購買虛擬貨幣", value=f"`{config.prefix}buy-coin [黃金貓貓幣單位] [btc,ltc,eth,usdt,doge,iota,xrp]`", inline=False)
             embed.add_field(name="賣出虛擬貨幣", value=f"`{config.prefix}sell-coin [黃金貓貓幣單位] [btc,ltc,eth,usdt,doge,iota,xrp]`", inline=False)
+            embed.add_field(name="虛擬貨幣報價", value=f"`{config.prefix}coin-price`", inline=False)
             await message.channel.send(embed=embed)
 db = DB()
 client.run(os.environ["DISCORD_BOT_TOKEN"])
