@@ -46,3 +46,10 @@ CREATE TABLE "user_group" (
 	"group"	TEXT,
 	PRIMARY KEY("id" AUTOINCREMENT)
 );
+CREATE TABLE "stock_assets" (
+	"uid"	INTEGER,
+	"stock"	TEXT,
+	"avg_price"	NUMERIC,
+	"stock_amount"	INTEGER,
+	FOREIGN KEY("uid") REFERENCES "user_group"("id") ON DELETE CASCADE
+)
