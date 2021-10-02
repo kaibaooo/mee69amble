@@ -607,7 +607,7 @@ async def on_message(message):
                 crt_money = db.fetchOneSQL(f'SELECT "money" FROM "money" WHERE "uid"={user_uid};')
                 db.WSQL(f'UPDATE "money" SET "money"={crt_money+expected_reward} WHERE "uid"={user_uid}')
                 if crt_stock == 0:
-                    db.WSQL(f'UPDATE "stock_assets" SET "avg_price"=0 WHERE "uid"={user_uid}"')
+                    db.WSQL(f'UPDATE "stock_assets" SET "avg_price"=0 WHERE "uid"={user_uid}')
                 embed=discord.Embed(description=f"{message.author.display_name} 你賣出了 {stock_sell_amount} 股 {stock_name} \n每股成交 {price} {config.economy_icon} 獲得了 {expected_reward} {config.economy_icon} 收益", color=0xFF3333)
                 # await message.channel.send(embed=embed)
                 await trade_msg.edit(content="", embed=embed)
