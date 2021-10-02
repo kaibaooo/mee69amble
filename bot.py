@@ -547,15 +547,23 @@ async def on_message(message):
             
             # await buyVCoin(message, user_uid, paid, coin_name)
         elif parse[0] == f"{config.prefix}stocks": # !stocks:
+            trade_msg = await message.channel.send(content="查詢中...")
             base_coins = db.fetchOneSQL(f'SELECT "money" FROM "money" WHERE "uid"={user_uid};')
             embed=discord.Embed(title=f"**{message.author.display_name} 持有的飆股**")
             embed.add_field(name=f"{config.economy_name} {config.economy_icon}", value=f"{base_coins}", inline=False)
             stocks = db.fetchAllSQL(f'SELECT "stock", "stock_amount", "avg_price" FROM "stock_assets" WHERE "uid"={user_uid};')
+            finnhub_client = finnhub.Client(api_key=os.environ["STOCK_API_TOKEN"])
             for row in stocks:
                 if row[1] == 0:
                     continue
-                embed.add_field(name=f"{row[0]} 有 {row[1]} 股", value=f"均價為 {row[2]:.6f} {config.economy_icon}", inline=False)
-            await message.channel.send(embed=embed)
+                price = finnhub_client.quote(row[0])["c"]
+                if price>=row[2]:
+                    embed.add_field(name=f"{row[0]} 有 {row[1]} 股", value=f"均價為 {row[2]:.6f} {config.economy_icon}，🔴損益 {(price-row[2])/row[2]*100:.4f} % ", inline=False)
+                else:
+                    embed.add_field(name=f"{row[0]} 有 {row[1]} 股", value=f"均價為 {row[2]:.6f} {config.economy_icon}，🟢損益 {(price-row[2])/row[2]*100:.4f} % ", inline=False)
+                # embed.add_field(name=f"{row[0]} 有 {row[1]} 股", value=f"均價為 {row[2]:.6f} {config.economy_icon}", inline=False)
+            # await message.channel.send(embed=embed)
+            await trade_msg.edit(content="", embed=embed)
         elif parse[0] == f"{config.prefix}buy-stock": # !buy-stock 50 intc
             # try:
             trade_msg = await message.channel.send(content="交割中...")
