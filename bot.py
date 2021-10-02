@@ -6,6 +6,8 @@ import random
 import asyncio
 import traceback
 import os
+import math
+import finnhub
 from pycoingecko import CoinGeckoAPI
 from datetime import datetime
 from sql_helper import *
@@ -113,7 +115,7 @@ async def battleGame(message:str, src_id:str, dst_id:str, paid:int, src_uid:str,
     db.WSQL(f'UPDATE money SET "money"={dst_money} WHERE "uid"={dst_uid};')
     db.WSQL(f'UPDATE condition_flags SET "battle_game_opponent"=0, "next_battle_game_time"={time.time()+config.battle_game_timeout}, "battle_game_exist"=0 WHERE "uid"={src_uid};')
 
-async def buyVCoin(message:str, user_uid:str, paid:int, coin_name:str) -> None:
+async def buyVCoin(message, user_uid:str, paid:int, coin_name:str) -> None:
     try:
         global db
         coin_name = config.coin_names2full[coin_name]
@@ -142,14 +144,35 @@ async def buyVCoin(message:str, user_uid:str, paid:int, coin_name:str) -> None:
         print(e)
         embed=discord.Embed(title=f"**{message.author.name} 進行了虛擬貨幣交易 交易失敗**", color=0xFF3333)
         await message.channel.send(embed=embed)
+
+async def buyStock(message, trade_msg, user_uid:str, buy_amount:int, stock_name:str, crt_price:int):
+    global db
+    crt_user_units = db.fetchOneSQL(f'SELECT "stock_amount" FROM "stock_assets" WHERE "uid"={user_uid} AND "stock"="{stock_name}";')
+    crt_user_avgprice = db.fetchOneSQL(f'SELECT "avg_price" FROM "stock_assets" WHERE "uid"={user_uid} AND "stock"="{stock_name}";')
+    # print(crt_user_units)
+    # print(crt_user_avgprice)
+    if crt_user_units == None: # 首次購買
+        db.WSQL(f'INSERT INTO stock_assets("uid","stock","stock_amount", "avg_price") VALUES ({user_uid},"{stock_name}",0,0)')
+        db.WSQL(f'UPDATE stock_assets SET "stock_amount"={buy_amount}, "avg_price"={crt_price} WHERE "uid"={user_uid} AND "stock"="{stock_name}";')
+    else:
+        avg_price = (crt_user_units / (crt_user_units + buy_amount) * crt_user_avgprice) + (buy_amount / (crt_user_units + buy_amount) * crt_price)
+        db.WSQL(f'UPDATE stock_assets SET "avg_price"={avg_price}, "stock_amount"={crt_user_units + buy_amount} WHERE "uid"={user_uid} AND "stock"="{stock_name}";')
+    crt_money = db.fetchOneSQL(f'SELECT "money" FROM "money" WHERE "uid"={user_uid}')
+    # print(crt_money)
+    crt_money -= math.ceil(buy_amount*crt_price)
+    db.WSQL(f'UPDATE "money" SET "money"={crt_money} WHERE uid={user_uid}')
+    embed=discord.Embed(title=f"**{message.author.name} 進行了虛擬美股交易 成交**", description=f"購入 {buy_amount} 單位的 {stock_name} 共 {buy_amount*crt_price} (~{math.ceil(buy_amount*crt_price)})\n單位現價 {crt_price} {config.economy_name} {config.economy_icon}", color=0xFF3333)
+    # embed=discord.Embed(title=f"", color=0xFF3333)
+    # await message.channel.send(embed=embed)
+    await trade_msg.edit(content="", embed=embed)
+    # await message.channel.send(embed=embed)
+
 def routine() -> None:
     db_Thread = DB()
     while(True):
         dailyReset(db_Thread)
         battleGameTimeout(db_Thread)
         time.sleep(5)
-
-
 
 @client.event
 async def on_ready():
@@ -522,6 +545,80 @@ async def on_message(message):
                 await message.channel.send(embed=embed)
             
             # await buyVCoin(message, user_uid, paid, coin_name)
+        elif parse[0] == f"{config.prefix}stocks": # !stocks:
+            base_coins = db.fetchOneSQL(f'SELECT "money" FROM "money" WHERE "uid"={user_uid};')
+            embed=discord.Embed(title=f"**{message.author.display_name} 持有的飆股**")
+            embed.add_field(name=f"{config.economy_name} {config.economy_icon}", value=f"{base_coins}", inline=False)
+            stocks = db.fetchAllSQL(f'SELECT "stock", "stock_amount", "avg_price" FROM "stock_assets" WHERE "uid"={user_uid};')
+            for row in stocks:
+                embed.add_field(name=f"{row[0]} 有 {row[1]} 股", value=f"均價為 {row[2]:.6f} {config.economy_icon}", inline=False)
+            await message.channel.send(embed=embed)
+        elif parse[0] == f"{config.prefix}buy-stock": # !buy-stock 50 intc
+            # try:
+            trade_msg = await message.channel.send(content="交割中...")
+            stock_buy_amount = int(parse[1])
+            stock_name = parse[2].upper()
+            finnhub_client = finnhub.Client(api_key=os.environ["STOCK_API_TOKEN"])
+            price = finnhub_client.quote(stock_name)["c"]
+            if crt_money < math.ceil(stock_buy_amount*price): # 要有足夠的錢
+                embed=discord.Embed(description=f"{message.author.display_name} 的 {config.economy_icon} 不夠買貨幣", color=0x00eeff)
+                await trade_msg.edit(content="", embed=embed)
+                # await message.channel.send(embed=embed)
+                return
+            if stock_buy_amount < 1: # 付出需要大於0
+                embed=discord.Embed(description=f"{message.author.display_name}，交易量不足一股", color=0x00eeff)
+                await trade_msg.edit(content="", embed=embed)
+                # await message.channel.send(embed=embed)
+                return
+            await buyStock(message, trade_msg, user_uid, stock_buy_amount, stock_name, price)
+        elif parse[0] == f"{config.prefix}sell-stock": # !sell-stock 50 intc
+            try:
+                trade_msg = await message.channel.send(content="交割中...")
+                stock_sell_amount = int(parse[1])
+                stock_name = parse[2].upper()
+                
+                finnhub_client = finnhub.Client(api_key=os.environ["STOCK_API_TOKEN"])
+                price = finnhub_client.quote(stock_name)["c"]
+                if price == 0:
+                    embed=discord.Embed(description=f"{message.author.display_name}，查無此股", color=0xFF3333)
+                    # await message.channel.send(embed=embed)
+                    await trade_msg.edit(content="", embed=embed)
+                    return
+                crt_stock = db.fetchOneSQL(f'SELECT "stock_amount" FROM "stock_assets" WHERE "uid"={user_uid} AND "stock"="{stock_name}"')
+                if crt_stock == None:
+                    embed=discord.Embed(description=f"{message.author.display_name}，{stock_name} 交割失敗 持有股數不足", color=0xFF3333)
+                    # await message.channel.send(embed=embed)
+                    await trade_msg.edit(content="", embed=embed)
+                    return
+                if stock_sell_amount < 1:
+                    embed=discord.Embed(description=f"{message.author.display_name}，{stock_name} 不足一股", color=0xFF3333)
+                    # await message.channel.send(embed=embed)
+                    await trade_msg.edit(content="", embed=embed)
+                    return
+                if crt_stock < stock_sell_amount:
+                    embed=discord.Embed(description=f"{message.author.display_name}，{stock_name} 交割失敗 持有股數不足", color=0xFF3333)
+                    # await message.channel.send(embed=embed)
+                    await trade_msg.edit(content="", embed=embed)
+                    return
+                expected_reward = math.floor(stock_sell_amount * price)
+                crt_stock -= stock_sell_amount
+                
+                db.WSQL(f'UPDATE "stock_assets" SET "stock_amount"={crt_stock} WHERE "uid"={user_uid} AND "stock"="{stock_name}"')
+                crt_money = db.fetchOneSQL(f'SELECT "money" FROM "money" WHERE "uid"={user_uid};')
+                db.WSQL(f'UPDATE "money" SET "money"={crt_money+expected_reward} WHERE "uid"={user_uid}')
+                if crt_stock == 0:
+                    db.WSQL(f'UPDATE "stock_assets" SET "avg_price"=0 WHERE "uid"={user_uid}"')
+                embed=discord.Embed(description=f"{message.author.display_name} 你賣出了 {stock_sell_amount} 股 {stock_name} \n每股成交 {price} {config.economy_icon} 獲得了 {expected_reward} {config.economy_icon} 收益", color=0xFF3333)
+                # await message.channel.send(embed=embed)
+                await trade_msg.edit(content="", embed=embed)
+            except Exception as e:
+                print(e)
+                embed=discord.Embed(description=f"Unexpected Error", color=0xFF3333)
+                await message.channel.send(embed=embed)
+            
+            pass
+        elif parse[0] == f"{config.prefix}buy-stock": # !sell-stock 50 intc
+            pass
         elif parse[0] == f"{config.prefix}shop": # !shop
             embed=discord.Embed(title=f"**{message.guild.name} 商店**", description="使用 `!shop [item name]` 可獲得有關某商品的更多詳細訊息 \n使用 `!buy [item name]` 來購買商品\n\n💸 這是我們的商品：")
             embed.add_field(name=f"椰子 - {config.economy_icon} 50", value="無用的椰子", inline=False)
@@ -563,6 +660,9 @@ async def on_message(message):
             embed.add_field(name="購買虛擬貨幣", value=f"`{config.prefix}buy-coin [黃金貓貓幣單位] [btc,ltc,eth,usdt,doge,iota,xrp]`", inline=False)
             embed.add_field(name="賣出虛擬貨幣", value=f"`{config.prefix}sell-coin [黃金貓貓幣單位] [btc,ltc,eth,usdt,doge,iota,xrp]`", inline=False)
             embed.add_field(name="虛擬貨幣報價", value=f"`{config.prefix}coin-price`", inline=False)
+            embed.add_field(name="查看持有虛擬美股", value=f"`{config.prefix}stocks`", inline=False)
+            embed.add_field(name="購買虛擬美股", value=f"`{config.prefix}buy-stock [購入股數:正整數] [美股代碼]`", inline=False)
+            embed.add_field(name="賣出虛擬美股", value=f"`{config.prefix}sell-stock [賣出股數:正整數] [美股代碼]`", inline=False)
             await message.channel.send(embed=embed)
 db = DB()
 client.run(os.environ["DISCORD_BOT_TOKEN"])
