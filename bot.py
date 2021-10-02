@@ -447,7 +447,6 @@ async def on_message(message):
                 vcoins = db.fetchAllSQL(f'SELECT "coin", "coin_amount", "avg_price" FROM "coin_assets" WHERE "uid"={user_uid};')
                 exist_coin_names = []
                 for row in vcoins:
-                    # print(row)
                     exist_coin_names.append(row[0])
                 # print(exist_coin_names)
                 if len(exist_coin_names) == 0:
@@ -456,6 +455,8 @@ async def on_message(message):
                 cg = CoinGeckoAPI()
                 result = cg.get_price(ids=exist_coin_names, vs_currencies='usd')
                 for row in vcoins:
+                    if row[1] == 0:
+                        continue
                     crt_price = result[row[0]]["usd"]
                     reward = (crt_price - row[2])/crt_price * 100
                     if reward < 0:
@@ -551,6 +552,8 @@ async def on_message(message):
             embed.add_field(name=f"{config.economy_name} {config.economy_icon}", value=f"{base_coins}", inline=False)
             stocks = db.fetchAllSQL(f'SELECT "stock", "stock_amount", "avg_price" FROM "stock_assets" WHERE "uid"={user_uid};')
             for row in stocks:
+                if row[1] == 0:
+                    continue
                 embed.add_field(name=f"{row[0]} 有 {row[1]} 股", value=f"均價為 {row[2]:.6f} {config.economy_icon}", inline=False)
             await message.channel.send(embed=embed)
         elif parse[0] == f"{config.prefix}buy-stock": # !buy-stock 50 intc
