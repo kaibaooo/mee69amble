@@ -571,6 +571,11 @@ async def on_message(message):
             stock_name = parse[2].upper()
             finnhub_client = finnhub.Client(api_key=os.environ["STOCK_API_TOKEN"])
             price = finnhub_client.quote(stock_name)["c"]
+            if price == 0:
+                embed=discord.Embed(description=f"{message.author.display_name}，查無此股", color=0xFF3333)
+                # await message.channel.send(embed=embed)
+                await trade_msg.edit(content="", embed=embed)
+                return
             if crt_money < math.ceil(stock_buy_amount*price): # 要有足夠的錢
                 embed=discord.Embed(description=f"{message.author.display_name} 的 {config.economy_icon} 不夠買貨幣", color=0x00eeff)
                 await trade_msg.edit(content="", embed=embed)
