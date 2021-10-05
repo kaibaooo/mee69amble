@@ -557,13 +557,13 @@ async def on_message(message):
                 if row[1] == 0:
                     continue
                 if row[2] == 0:
-                    embed.add_field(name=f"{row[0]} 有 {row[1]} 股", value=f"均價為 {row[2]:.6f} {config.economy_icon}，🔴損益 0 % ", inline=False)
+                    # embed.add_field(name=f"{row[0]} 有 {row[1]} 股", value=f"均價為 {row[2]:.6f} {config.economy_icon}，🔴損益 0 % ", inline=False)
                     continue
                 price = finnhub_client.quote(row[0])["c"]
                 if price>=row[2]:
-                    embed.add_field(name=f"{row[0]} 有 {row[1]} 股", value=f"均價為 {row[2]:.6f} {config.economy_icon}，🔴損益 {(price-row[2])*row[2]} ( {(price-row[2])/row[2]*100:.4f} % )", inline=False)
+                    embed.add_field(name=f"{row[0]} 有 {row[1]} 股", value=f"均價為 {row[2]:.6f} {config.economy_icon}，🔴損益 {(price-row[2])*row[2]:.4f} ( {(price-row[2])/row[2]*100:.4f} % )", inline=False)
                 else:
-                    embed.add_field(name=f"{row[0]} 有 {row[1]} 股", value=f"均價為 {row[2]:.6f} {config.economy_icon}，🟢損益 {(price-row[2])*row[2]} ( {(price-row[2])/row[2]*100:.4f} % )", inline=False)
+                    embed.add_field(name=f"{row[0]} 有 {row[1]} 股", value=f"均價為 {row[2]:.6f} {config.economy_icon}，🟢損益 {(price-row[2])*row[2]:.4f} ( {(price-row[2])/row[2]*100:.4f} % )", inline=False)
                 # embed.add_field(name=f"{row[0]} 有 {row[1]} 股", value=f"均價為 {row[2]:.6f} {config.economy_icon}", inline=False)
             # await message.channel.send(embed=embed)
             await trade_msg.edit(content="", embed=embed)
