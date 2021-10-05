@@ -553,6 +553,7 @@ async def on_message(message):
             embed.add_field(name=f"{config.economy_name} {config.economy_icon}", value=f"{base_coins}", inline=False)
             stocks = db.fetchAllSQL(f'SELECT "stock", "stock_amount", "avg_price" FROM "stock_assets" WHERE "uid"={user_uid};')
             finnhub_client = finnhub.Client(api_key=os.environ["STOCK_API_TOKEN"])
+            diff_sum = 0
             for row in stocks:
                 if row[1] == 0:
                     continue
@@ -561,11 +562,13 @@ async def on_message(message):
                     continue
                 price = finnhub_client.quote(row[0])["c"]
                 if price>=row[2]:
-                    embed.add_field(name=f"{row[0]} 有 {row[1]} 股", value=f"均價為 {row[2]:.6f} {config.economy_icon}，🔴損益 {(price-row[2])*row[2]:.4f} ( {(price-row[2])/row[2]*100:.4f} % )", inline=False)
+                    embed.add_field(name=f"{row[0]} 有 {row[1]} 股", value=f"均價為 {row[2]:.6f} {config.economy_icon}，🔴損益 {(price-row[2])*row[1]:.4f} ( {(price-row[2])/row[2]*100:.4f} % )", inline=False)
                 else:
-                    embed.add_field(name=f"{row[0]} 有 {row[1]} 股", value=f"均價為 {row[2]:.6f} {config.economy_icon}，🟢損益 {(price-row[2])*row[2]:.4f} ( {(price-row[2])/row[2]*100:.4f} % )", inline=False)
+                    embed.add_field(name=f"{row[0]} 有 {row[1]} 股", value=f"均價為 {row[2]:.6f} {config.economy_icon}，🟢損益 {(price-row[2])*row[1]:.4f} ( {(price-row[2])/row[2]*100:.4f} % )", inline=False)
+                diff_sum += (price-row[2])*row[1]
                 # embed.add_field(name=f"{row[0]} 有 {row[1]} 股", value=f"均價為 {row[2]:.6f} {config.economy_icon}", inline=False)
             # await message.channel.send(embed=embed)
+            embed.add_field(name=f"未實現損益", value=f"{diff_sum:.6f} {config.economy_icon}", inline=False)
             await trade_msg.edit(content="", embed=embed)
         elif parse[0] == f"{config.prefix}buy-stock": # !buy-stock 50 intc
             # try:
